@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Earthlike Planet with Enhanced Orbit Controls</title>
+  
+  <!-- Import map to remap bare specifiers -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+    }
+  }
+  </script>
+  
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    /* Controls Panel Styling */
+    #controls {
+      position: absolute;
+      top: 10px; left: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 15px 15px 80px 15px;
+      border-radius: 12px;
+      box-shadow: 0px 4px 12px rgba(0,0,0,0.4);
+      font-family: sans-serif;
+      max-width: 320px;
+      max-height: calc(100% - 20px);
+      overflow-y: auto;
+      z-index: 100;
+    }
+    #controls .camera-animation-controls { display: flex; justify-content: space-between; margin-bottom: 10px; }
+    #controls .camera-animation-controls button { flex: 1; margin: 0 5px; }
+    #controls h2, #controls h3 { margin: 10px 0 5px; text-align: center; }
+    .control-group { margin-bottom: 12px; }
+    .control-group label { display: block; font-size: 14px; margin-bottom: 4px; }
+    .control-group input[type="range"],
+    .control-group input[type="checkbox"] { width: 100%; }
+    .slider-container { position: relative; }
+    .slider-marker {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px; height: 20px; pointer-events: none;
+    }
+    .marker-hue { background: #8B4513; }
+    #controls button { width: 100%; padding: 8px; font-size: 14px; margin-top: 5px; cursor: pointer; }
+    #importExportBox { width: 100%; height: 50px; margin-top: 8px; font-size: 13px; }
+    /* Preset Overlay Styling */
+    #presetOverlay {
+      position: absolute; bottom: 10px; right: 10px;
+      display: flex; flex-wrap: wrap; gap: 10px;
+      z-index: 200; padding: 5px; border-radius: 8px;
+    }
+    .presetItem {
+      position: relative; width: 120px; height: 120px;
+      border: 1px solid #ccc; overflow: hidden; cursor: pointer;
+      border-radius: 6px;
+    }
+    .presetItem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .presetItem button.deleteBtn {
+      position: absolute; top: 2px; right: 2px;
+      background: rgba(255,0,0,0.8); border: none; color: white;
+      font-size: 12px; padding: 2px 4px; border-radius: 3px; cursor: pointer;
+    }
+    .presetItem button.editBtn {
+      position: absolute; top: 2px; left: 2px;
+      background: rgba(0,0,0,0.6); border: none; color: #fff;
+      font-size: 12px; padding: 2px 4px; border-radius: 3px; cursor: pointer;
+    }
+    @media (max-width:600px) {
+      #controls { max-width: 90%; left: 5%; }
+      #presetOverlay { right: 5px; bottom: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Controls Panel -->
+  <div id="controls">
+    <div class="camera-animation-controls">
+      <button id="orbitButton">Orbit</button>
+      <button id="stopCameraButton">Stop Animation</button>
+      <button id="flightTourButton">Flight Tour</button>
+    </div>
+    <h2>Planet Controls</h2>
+    <!-- Planet Parameters -->
+    <div class="control-group">
+      <label for="seaLevel">Sea Level:</label>
+      <input type="range" id="seaLevel" min="-0.1" max="0.1" step="0.01" value="0.00">
+    </div>
+    <div class="control-group">
+      <label for="noiseScale">Noise Scale:</label>
+      <input type="range" id="noiseScale" min="1" max="10" step="0.1" value="2.5">
+    </div>
+    <div class="control-group">
+      <label for="mountainHeight">Mountain Height:</label>
+      <input type="range" id="mountainHeight" min="0" max="0.2" step="0.01" value="0.06">
+    </div>
+    <div class="control-group">
+      <label for="temperature">Temperature (Colder/Hotter):</label>
+      <input type="range" id="temperature" min="-1" max="1" step="0.1" value="0">
+    </div>
+    <div class="control-group">
+      <label for="atmosphereThickness">Atmosphere Thickness:</label>
+      <input type="range" id="atmosphereThickness" min="1.01" max="1.5" step="0.01" value="1.33">
+    </div>
+    <div class="control-group">
+      <label for="atmosphereIntensity">Atmosphere Intensity:</label>
+      <input type="range" id="atmosphereIntensity" min="0" max="1" step="0.1" value="0.2">
+    </div>
+    <div class="control-group">
+      <label for="cloudOpacity">Cloud Opacity:</label>
+      <input type="range" id="cloudOpacity" min="0" max="1" step="0.1" value="0.1">
+    </div>
+    <div class="control-group">
+      <label for="cloudNoiseScale">Cloud Noise Scale:</label>
+      <input type="range" id="cloudNoiseScale" min="1" max="5" step="0.1" value="1.6">
+    </div>
+    <div class="control-group">
+      <label for="sizeModifier">Size Modifier:</label>
+      <input type="range" id="sizeModifier" min="0.5" max="1.5" step="0.01" value="1.13">
+    </div>
+    <div class="control-group">
+      <label for="landHueAdjustment">Land Hue Adjustment:</label>
+      <div class="slider-container">
+        <input type="range" id="landHueAdjustment" min="-180" max="180" step="1" value="0">
+        <div class="slider-marker marker-hue"></div>
+      </div>
+    </div>
+    <div class="control-group">
+      <label for="seaHueAdjustment">Sea Hue Adjustment:</label>
+      <div class="slider-container">
+        <input type="range" id="seaHueAdjustment" min="-180" max="180" step="1" value="0">
+        <div class="slider-marker marker-hue"></div>
+      </div>
+    </div>
+    <div class="control-group">
+      <label for="airHueAdjustment">Air Hue Adjustment:</label>
+      <div class="slider-container">
+        <input type="range" id="airHueAdjustment" min="-180" max="180" step="1" value="0">
+        <div class="slider-marker marker-hue"></div>
+      </div>
+    </div>
+    <div class="control-group">
+      <label for="rotationSpeed">Rotation Speed:</label>
+      <input type="range" id="rotationSpeed" min="0" max="0.01" step="0.0001" value="0.001">
+    </div>
+    
+    <!-- Post-Processing Effects Controls -->
+    <h2>Post-Processing Effects</h2>
+    <div class="control-group">
+      <label><input type="checkbox" id="enablePixelation" checked> Enable Pixelation</label>
+    </div>
+    <div class="control-group">
+      <label for="pixelSize">Pixelation Size:</label>
+      <input type="range" id="pixelSize" min="0" max="50" step="1" value="10">
+    </div>
+    <div class="control-group">
+      <label><input type="checkbox" id="enableCelShading" checked> Enable Cel Shading</label>
+    </div>
+    <div class="control-group">
+      <label for="celLevels">Cel Shading Levels:</label>
+      <input type="range" id="celLevels" min="0" max="10" step="1" value="5">
+    </div>
+    
+    <!-- Star Color Realism Controls -->
+    <h2>Star Color Realism</h2>
+    <div class="control-group">
+      <label><input type="checkbox" id="enableRealisticStars" checked> Enable Realistic Star Colors</label>
+    </div>
+    <div class="control-group">
+      <label for="starColorMix">Star Color Mix (0 = realistic, 1 = random):</label>
+      <input type="range" id="starColorMix" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    
+    <!-- Standard Buttons -->
+    <button id="updateButton">Update</button>
+    <button id="regenerateButton">Regenerate Fractal</button>
+    <button id="resetHuesButton">Reset Hues</button>
+    <button id="randomButton">Random Planet</button>
+    <h2>Import/Export</h2>
+    <button id="exportButton">Export Settings</button>
+    <textarea id="importExportBox" placeholder="Paste your settings here..."></textarea>
+    <button id="importButton">Import Settings</button>
+    <button id="saveFileButton">Save Planet Data</button>
+    <button id="loadFileButton">Load Planet Data</button>
+    <h2>Presets</h2>
+    <button id="savePresetButton">Save Preset</button>
+  </div>
+  
+  <!-- Preset Overlay -->
+  <div id="presetOverlay"></div>
+  
+  <!-- Simplex Noise Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+  
+  <!-- Main App Script -->
+  <script type="module">
+    import * as THREE from "three";
+    import { EffectComposer } from "https://threejs.org/examples/jsm/postprocessing/EffectComposer.js";
+    import { RenderPass } from "https://threejs.org/examples/jsm/postprocessing/RenderPass.js";
+    import { ShaderPass } from "https://threejs.org/examples/jsm/postprocessing/ShaderPass.js";
+
+    // -------------------------
+    // Enhanced Novel Orbit Controls with Right-Drag Pan/Reframe
+    // -------------------------
+    class NovelOrbitControls {
+      constructor(camera, domElement) {
+        this.camera = camera;
+        this.domElement = domElement;
+        // Always orbit around (0,0,0) initially
+        this.target = new THREE.Vector3(0, 0, 0);
+        const offset = camera.position.clone().sub(this.target);
+        this.spherical = new THREE.Spherical().setFromVector3(offset);
+        this.initialSpherical = this.spherical.clone();
+        this.rotateSpeed = 1.0;
+        this.zoomSpeed = 1.0;
+        this.dampingFactor = 0.1;
+        this.velocity = new THREE.Vector2(0, 0);
+        // Left-drag for rotation; right-drag for panning/reframing
+        this.isLeftDragging = false;
+        this.leftLastPosition = new THREE.Vector2();
+        this.isRightDragging = false;
+        this.rightLastPosition = new THREE.Vector2();
+        // Set reasonable min/max zoom distances
+        this.minDistance = 2;
+        this.maxDistance = 20;
+
+        this.domElement.addEventListener("mousedown", this.onMouseDown.bind(this), false);
+        this.domElement.addEventListener("mousemove", this.onMouseMove.bind(this), false);
+        this.domElement.addEventListener("mouseup", this.onMouseUp.bind(this), false);
+        this.domElement.addEventListener("wheel", this.onMouseWheel.bind(this), false);
+        // Prevent default context menu on right-click
+        this.domElement.addEventListener("contextmenu", (e) => { e.preventDefault(); }, false);
+      }
+
+      onMouseDown(event) {
+        if (event.button === 0) { // left button: rotate
+          this.isLeftDragging = true;
+          this.leftLastPosition.set(event.clientX, event.clientY);
+        } else if (event.button === 2) { // right button: pan/reframe
+          this.isRightDragging = true;
+          this.rightLastPosition.set(event.clientX, event.clientY);
+        }
+      }
+
+      onMouseMove(event) {
+        if (this.isLeftDragging) {
+          const deltaX = event.clientX - this.leftLastPosition.x;
+          const deltaY = event.clientY - this.leftLastPosition.y;
+          this.leftLastPosition.set(event.clientX, event.clientY);
+          this.velocity.x = -deltaX * 0.005 * this.rotateSpeed;
+          this.velocity.y = -deltaY * 0.005 * this.rotateSpeed;
+          this.spherical.theta += this.velocity.x;
+          this.spherical.phi += this.velocity.y;
+          this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
+          this.updateCamera();
+        } else if (this.isRightDragging) {
+          // Instead of zooming, we pan the target.
+          const deltaX = event.clientX - this.rightLastPosition.x;
+          const deltaY = event.clientY - this.rightLastPosition.y;
+          this.rightLastPosition.set(event.clientX, event.clientY);
+          // Compute a pan factor based on current distance and camera FOV.
+          const panSpeed = (this.spherical.radius * Math.tan((this.camera.fov * Math.PI/180) / 2)) / (window.innerHeight / 2);
+          const panOffset = new THREE.Vector3();
+          // Compute camera's right vector
+          const right = new THREE.Vector3();
+          this.camera.getWorldDirection(right);
+          right.cross(this.camera.up).normalize();
+          // Up vector from camera
+          const up = new THREE.Vector3();
+          up.copy(this.camera.up).normalize();
+          // Adjust target by panning: horizontal movement pans along the right vector;
+          // vertical movement pans along the up vector.
+          panOffset.add(right.multiplyScalar(-deltaX * panSpeed));
+          panOffset.add(up.multiplyScalar(deltaY * panSpeed));
+          this.target.add(panOffset);
+          this.updateCamera();
+        }
+      }
+
+      onMouseUp(event) {
+        if (event.button === 0) { this.isLeftDragging = false; }
+        else if (event.button === 2) { this.isRightDragging = false; }
+      }
+
+      onMouseWheel(event) {
+        // Zoom in/out using mouse wheel, clamped by min/max distance.
+        this.spherical.radius += event.deltaY * 0.01 * this.zoomSpeed;
+        this.spherical.radius = THREE.MathUtils.clamp(this.spherical.radius, this.minDistance, this.maxDistance);
+        this.updateCamera();
+      }
+
+      updateCamera() {
+        // Calculate new camera position using the spherical offset and current target.
+        const newPos = new THREE.Vector3().setFromSpherical(this.spherical).add(this.target);
+        this.camera.position.copy(newPos);
+        this.camera.lookAt(this.target);
+      }
+
+      // Call in your render loop to allow damping after dragging stops.
+      update() {
+        if (!this.isLeftDragging && !this.isRightDragging) {
+          this.velocity.multiplyScalar(1 - this.dampingFactor);
+          if (this.velocity.length() > 0.0001) {
+            this.spherical.theta += this.velocity.x;
+            this.spherical.phi += this.velocity.y;
+            this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
+            this.updateCamera();
+          }
+        }
+      }
+
+      // Reset camera to its initial state.
+      reset() {
+        this.spherical.copy(this.initialSpherical);
+        this.target.set(0,0,0);
+        this.updateCamera();
+      }
+    }
+
+    // -------------------------
+    // Postprocessing Passes (PixelatePass & CelShadingPass)
+    // -------------------------
+    class PixelatePass extends ShaderPass {
+      constructor({ pixelSize = 10, resolution = new THREE.Vector2(window.innerWidth, window.innerHeight) } = {}) {
+        const pixelateShader = {
+          uniforms: {
+            tDiffuse: { value: null },
+            pixelSize: { value: pixelSize },
+            resolution: { value: resolution }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main(){
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float pixelSize;
+            uniform vec2 resolution;
+            varying vec2 vUv;
+            void main(){
+              if(pixelSize < 0.01) {
+                gl_FragColor = texture2D(tDiffuse, vUv);
+              } else {
+                vec2 dxy = pixelSize / resolution;
+                vec2 coord = dxy * floor(vUv / dxy) + dxy * 0.5;
+                gl_FragColor = texture2D(tDiffuse, coord);
+              }
+            }
+          `
+        };
+        super(pixelateShader);
+        this.uniforms.pixelSize.value = pixelSize;
+        this.uniforms.resolution.value = resolution;
+      }
+    }
+
+    class CelShadingPass extends ShaderPass {
+      constructor({ levels = 5 } = {}) {
+        const celShader = {
+          uniforms: {
+            tDiffuse: { value: null },
+            levels: { value: levels }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main(){
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float levels;
+            varying vec2 vUv;
+            void main(){
+              if(levels < 0.01) {
+                gl_FragColor = texture2D(tDiffuse, vUv);
+              } else {
+                vec4 color = texture2D(tDiffuse, vUv);
+                color.rgb = floor(color.rgb * levels) / levels;
+                gl_FragColor = color;
+              }
+            }
+          `
+        };
+        super(celShader);
+        this.uniforms.levels.value = levels;
+      }
+    }
+
+    // -------------------------
+    // PlanetApp Module (planet generation, UI, animations)
+    // -------------------------
+    const PlanetApp = (() => {
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x000000, 0.0005);
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      const noise = new SimplexNoise();
+
+      // Postprocessing setup
+      const composer = new EffectComposer(renderer);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+      const pixelatePass = new PixelatePass({ pixelSize: 10, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+      composer.addPass(pixelatePass);
+      const celShadingPass = new CelShadingPass({ levels: 5 });
+      composer.addPass(celShadingPass);
+
+      let starField;
+      let seaLevel = -0.02, noiseScale = 4, mountainHeight = 0.08, temperature = 0.0,
+          atmosphereThickness = 1.2, atmosphereIntensity = 0.4, sizeModifier = 1,
+          landHueAdjustment = 0, seaHueAdjustment = 0, airHueAdjustment = 0,
+          cloudOpacity = 0.4, cloudNoiseScale = 3, rotationSpeed = 0.001;
+      let sphere, planetGroup, sunLight;
+      let seedOffset = 0;
+      const presets = [];
+
+      let cameraAnimationMode = "none";
+      let cameraAnimationStartTime = 0;
+      let orbitConfig = null, flightCurve = null;
+      let previousTangent = new THREE.Vector3(0,0,1);
+      const originalCameraPosition = new THREE.Vector3(-1.2, 0, 3);
+      const originalCameraTarget = new THREE.Vector3(0,0,0);
+      let updateTimeout = null;
+
+      // Helper functions (smoothStep, createGlowSprite, applyHueAdjustment, getRealisticStarColor)...
+      function smoothStep(x, edge0, edge1) {
+        let t = THREE.MathUtils.clamp((x-edge0)/(edge1-edge0),0,1);
+        return t*t*(3-2*t);
+      }
+      function createGlowSprite(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128; canvas.height = 128;
+        const context = canvas.getContext("2d");
+        const gradient = context.createRadialGradient(64,64,0,64,64,64);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        context.fillStyle = gradient;
+        context.fillRect(0,0,128,128);
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, blending: THREE.AdditiveBlending, transparent: true });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(size,size,1);
+        return sprite;
+      }
+      function applyHueAdjustment(color, hueShift) {
+        const hsl = {h:0, s:0, l:0};
+        color.getHSL(hsl);
+        hsl.h = (hsl.h + hueShift/360 + 1) % 1;
+        color.setHSL(hsl.h, hsl.s, hsl.l);
+      }
+      function getRealisticStarColor() {
+        let t = Math.random();
+        let color = new THREE.Color();
+        if(t<0.5) {
+          let alpha = t/0.5;
+          color.lerpColors(new THREE.Color(1,1,1), new THREE.Color(1,1,0.6), alpha);
+        } else {
+          let alpha = (t-0.5)/0.5;
+          color.lerpColors(new THREE.Color(1,1,0.6), new THREE.Color(1,0.6,0.4), alpha);
+        }
+        return color;
+      }
+
+      // Planet generation functions (createPlanet, addAtmosphere, createCloudLayers, etc.) remain similar.
+      function createPlanet() {
+        if(planetGroup){ scene.remove(planetGroup); }
+        const geometry = new THREE.SphereGeometry(sizeModifier, 2048, 2048);
+        const colors = [];
+        const position = geometry.attributes.position;
+        for(let i=0;i<position.count;i++){
+          const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+          const height = noise.noise3D(x*noiseScale+seedOffset, y*noiseScale+seedOffset, z*noiseScale+seedOffset) * mountainHeight;
+          position.setXYZ(i, x*(1+height), y*(1+height), z*(1+height));
+          const latitude = Math.asin(y/Math.sqrt(x*x+y*y+z*z));
+          const latFactor = Math.abs(latitude)/(Math.PI/2);
+          const gradientWidth = 0.05;
+          const desertColor = new THREE.Color(0xc2b280);
+          const tropicalColor = new THREE.Color(0x556b2f);
+          const temperateColor = new THREE.Color(0x8f9779);
+          const iceColor = new THREE.Color(0xf5f5f5);
+          let baseColor = new THREE.Color();
+          const color = new THREE.Color();
+          if(height<=seaLevel){
+            let waterBlend = (height-(seaLevel-0.02))/0.02;
+            waterBlend = THREE.MathUtils.clamp(waterBlend, 0,1);
+            const shallowWater = new THREE.Color(0x2f4f4f);
+            const deepWater = new THREE.Color(0x1e3f66);
+            color.copy(deepWater).lerp(shallowWater, waterBlend);
+          } else {
+            if(temperature>=0){
+              if(temperature>=0.98){
+                color.copy(desertColor);
+              } else {
+                let hotFactor = temperature/0.98;
+                let D = THREE.MathUtils.lerp(0.25,1,hotFactor);
+                let V = THREE.MathUtils.lerp(0.50,1,hotFactor);
+                let I = THREE.MathUtils.lerp(0.75,1,hotFactor);
+                if(latFactor < D-gradientWidth/2){ baseColor.copy(desertColor); }
+                else if(latFactor < D+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, D-gradientWidth/2, D+gradientWidth/2);
+                  baseColor.copy(desertColor).lerp(tropicalColor, tVal);
+                } else if(latFactor < V-gradientWidth/2){ baseColor.copy(tropicalColor); }
+                else if(latFactor < V+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, V-gradientWidth/2, V+gradientWidth/2);
+                  baseColor.copy(tropicalColor).lerp(temperateColor, tVal);
+                } else if(latFactor < I-gradientWidth/2){ baseColor.copy(temperateColor); }
+                else if(latFactor < I+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, I-gradientWidth/2, I+gradientWidth/2);
+                  baseColor.copy(temperateColor).lerp(iceColor, tVal);
+                } else { baseColor.copy(iceColor); }
+                color.copy(baseColor);
+              }
+            } else {
+              if(temperature<=-0.98){ color.copy(iceColor); }
+              else {
+                let coldFactor = -temperature/0.98;
+                let D = THREE.MathUtils.lerp(0.25,0,coldFactor);
+                let V = THREE.MathUtils.lerp(0.50,0,coldFactor);
+                let I = THREE.MathUtils.lerp(0.75,0,coldFactor);
+                if(latFactor < D-gradientWidth/2){ baseColor.copy(desertColor); }
+                else if(latFactor < D+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, D-gradientWidth/2, D+gradientWidth/2);
+                  baseColor.copy(desertColor).lerp(tropicalColor, tVal);
+                } else if(latFactor < V-gradientWidth/2){ baseColor.copy(tropicalColor); }
+                else if(latFactor < V+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, V-gradientWidth/2, V+gradientWidth/2);
+                  baseColor.copy(tropicalColor).lerp(temperateColor, tVal);
+                } else if(latFactor < I-gradientWidth/2){ baseColor.copy(temperateColor); }
+                else if(latFactor < I+gradientWidth/2){
+                  let tVal = smoothStep(latFactor, I-gradientWidth/2, I+gradientWidth/2);
+                  baseColor.copy(temperateColor).lerp(iceColor, tVal);
+                } else { baseColor.copy(iceColor); }
+                color.copy(baseColor);
+              }
+            }
+          }
+          applyHueAdjustment(color, landHueAdjustment);
+          colors.push(color.r, color.g, color.b);
+        }
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        geometry.attributes.color.needsUpdate = true;
+        const material = new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 1.0,
+          metalness: 0.0,
+        });
+        sphere = new THREE.Mesh(geometry, material);
+        sphere.castShadow = true; sphere.receiveShadow = true;
+        planetGroup = new THREE.Group();
+        planetGroup.add(sphere);
+        addAtmosphere();
+        createCloudLayers(atmosphereThickness*sizeModifier);
+        scene.add(planetGroup);
+      }
+
+      function addAtmosphere() {
+        const atmosphereGeometry = new THREE.SphereGeometry(atmosphereThickness*sizeModifier, 2048, 2048);
+        const atmosphereMaterial = new THREE.MeshPhongMaterial({
+          color: 0x87cefa,
+          transparent: true,
+          opacity: atmosphereIntensity,
+          emissive: 0x1e90ff,
+          emissiveIntensity: 0.15,
+          side: THREE.BackSide,
+        });
+        applyHueAdjustment(atmosphereMaterial.color, airHueAdjustment);
+        const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        sphere.add(atmosphere);
+      }
+
+      function createCloudLayers(baseRadius) {
+        for(let i=0;i<2;i++){
+          const layerRadius = baseRadius+0.05+i*0.01;
+          const layerNoiseScale = cloudNoiseScale*(1-i*0.33);
+          const layerOpacity = cloudOpacity*(1-i*0.25);
+          const cloudLayer = createCloudLayer(layerRadius, layerNoiseScale, layerOpacity, airHueAdjustment);
+          sphere.add(cloudLayer);
+        }
+      }
+
+      function createCloudLayer(radius, noiseScaleFactor, opacity, hueAdjustment) {
+        const cloudGeometry = new THREE.SphereGeometry(radius, 2048, 2048);
+        const cloudColors = [];
+        const positions = cloudGeometry.attributes.position;
+        for(let i=0;i<positions.count;i++){
+          const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+          const noiseValue = noise.noise3D(x*noiseScaleFactor, y*noiseScaleFactor, z*noiseScaleFactor)*0.5+0.5;
+          const color = new THREE.Color(0xffffff).lerp(new THREE.Color(0x000000), 1-noiseValue);
+          applyHueAdjustment(color, hueAdjustment);
+          cloudColors.push(color.r, color.g, color.b);
+        }
+        cloudGeometry.setAttribute("color", new THREE.Float32BufferAttribute(cloudColors,3));
+        return new THREE.Mesh(cloudGeometry, new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: opacity,
+        }));
+      }
+
+      function createStarfield() {
+        if(starField){ scene.remove(starField); }
+        const count = 10000;
+        const starGeometry = new THREE.BufferGeometry();
+        const positions = [];
+        const colors = [];
+        const realisticEnabled = document.getElementById("enableRealisticStars").checked;
+        const mixValue = realisticEnabled ? parseFloat(document.getElementById("starColorMix").value) : 1;
+        for(let i=0;i<count;i++){
+          positions.push(
+            (Math.random()-0.5)*2000,
+            (Math.random()-0.5)*2000,
+            (Math.random()-0.5)*2000
+          );
+          const realisticColor = getRealisticStarColor();
+          const randomColor = new THREE.Color(Math.random(), Math.random(), Math.random());
+          const finalColor = realisticColor.clone().lerp(randomColor, mixValue);
+          colors.push(finalColor.r, finalColor.g, finalColor.b);
+        }
+        starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
+        starGeometry.setAttribute("color", new THREE.Float32BufferAttribute(colors,3));
+        const starMaterial = new THREE.PointsMaterial({ size: 1.5, vertexColors: true });
+        starField = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starField);
+      }
+
+      function createFlightCurve() {
+        const points = [];
+        const flightAltitude = sizeModifier*0.5;
+        const flightRadius = sizeModifier*1.1;
+        for(let i=0;i<8;i++){
+          const angle = (i/8)*Math.PI*2;
+          const x = flightRadius*Math.cos(angle);
+          const z = flightRadius*Math.sin(angle);
+          points.push(new THREE.Vector3(x, flightAltitude, z));
+        }
+        return new THREE.CatmullRomCurve3(points, true);
+      }
+
+      function updateFlightTour() {
+        const elapsed = (performance.now()-cameraAnimationStartTime)/1000;
+        const flightDuration = 80;
+        const t = (elapsed % flightDuration)/flightDuration;
+        const pos = flightCurve.getPointAt(t);
+        let tangent = flightCurve.getTangentAt(t).clone().normalize();
+        if(previousTangent.dot(tangent)<0){ tangent.negate(); }
+        previousTangent.copy(tangent);
+        let toCenter = new THREE.Vector3().subVectors(new THREE.Vector3(0,0,0), pos).normalize();
+        let combinedForward = new THREE.Vector3().addVectors(tangent.multiplyScalar(0.8), toCenter.multiplyScalar(0.6)).normalize();
+        const rollAngle = THREE.MathUtils.degToRad(-70);
+        const rollQuat = new THREE.Quaternion().setFromAxisAngle(combinedForward, rollAngle);
+        const desiredUp = new THREE.Vector3(0,1,0).applyQuaternion(rollQuat);
+        let m = new THREE.Matrix4();
+        m.lookAt(pos, pos.clone().add(combinedForward), desiredUp);
+        let desiredQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+        camera.quaternion.slerp(desiredQuat, 0.1);
+        camera.position.copy(pos);
+      }
+
+      function generateThumbnail() {
+        return new Promise((resolve, reject) => {
+          composer.render();
+          const fullDataURL = renderer.domElement.toDataURL("image/png");
+          const img = new Image();
+          img.onload = () => {
+            const canvasWidth = renderer.domElement.width;
+            const canvasHeight = renderer.domElement.height;
+            const cropSize = Math.min(canvasWidth, canvasHeight);
+            const cropX = (canvasWidth-cropSize)/2;
+            const cropY = (canvasHeight-cropSize)/2;
+            const thumbCanvas = document.createElement("canvas");
+            const thumbSize = 120;
+            thumbCanvas.width = thumbSize; thumbCanvas.height = thumbSize;
+            const ctx = thumbCanvas.getContext("2d");
+            ctx.drawImage(img, cropX, cropY, cropSize, cropSize, 0,0,thumbSize, thumbSize);
+            resolve(thumbCanvas.toDataURL("image/png"));
+          };
+          img.onerror = reject;
+          img.src = fullDataURL;
+        });
+      }
+
+      function exportSettings() {
+        const settings = {
+          seaLevel: parseFloat(document.getElementById("seaLevel").value),
+          noiseScale: parseFloat(document.getElementById("noiseScale").value),
+          mountainHeight: parseFloat(document.getElementById("mountainHeight").value),
+          temperature: parseFloat(document.getElementById("temperature").value),
+          atmosphereThickness: parseFloat(document.getElementById("atmosphereThickness").value),
+          atmosphereIntensity: parseFloat(document.getElementById("atmosphereIntensity").value),
+          cloudOpacity: parseFloat(document.getElementById("cloudOpacity").value),
+          cloudNoiseScale: parseFloat(document.getElementById("cloudNoiseScale").value),
+          sizeModifier: parseFloat(document.getElementById("sizeModifier").value),
+          landHueAdjustment: parseFloat(document.getElementById("landHueAdjustment").value),
+          seaHueAdjustment: parseFloat(document.getElementById("seaHueAdjustment").value),
+          airHueAdjustment: parseFloat(document.getElementById("airHueAdjustment").value),
+          rotationSpeed: parseFloat(document.getElementById("rotationSpeed").value)
+        };
+        const json = JSON.stringify(settings);
+        const exportString = `PLANET_${btoa(json)}_DATA`;
+        document.getElementById("importExportBox").value = exportString;
+      }
+
+      function importSettings() {
+        const importString = document.getElementById("importExportBox").value;
+        try {
+          if(importString.startsWith("PLANET_") && importString.endsWith("_DATA")){
+            const encoded = importString.slice(7, -5);
+            const json = atob(encoded);
+            const settings = JSON.parse(json);
+            for(let key in settings){
+              if(document.getElementById(key)){
+                document.getElementById(key).value = settings[key];
+              }
+            }
+            updatePlanetParameters();
+            createPlanet();
+          } else { throw new Error("Invalid settings format"); }
+        } catch(e) { alert("Failed to import settings: "+e.message); }
+      }
+
+      async function savePlanetData() {
+        const settings = {
+          seaLevel: parseFloat(document.getElementById("seaLevel").value),
+          noiseScale: parseFloat(document.getElementById("noiseScale").value),
+          mountainHeight: parseFloat(document.getElementById("mountainHeight").value),
+          temperature: parseFloat(document.getElementById("temperature").value),
+          atmosphereThickness: parseFloat(document.getElementById("atmosphereThickness").value),
+          atmosphereIntensity: parseFloat(document.getElementById("atmosphereIntensity").value),
+          cloudOpacity: parseFloat(document.getElementById("cloudOpacity").value),
+          cloudNoiseScale: parseFloat(document.getElementById("cloudNoiseScale").value),
+          sizeModifier: parseFloat(document.getElementById("sizeModifier").value),
+          landHueAdjustment: parseFloat(document.getElementById("landHueAdjustment").value),
+          seaHueAdjustment: parseFloat(document.getElementById("seaHueAdjustment").value),
+          airHueAdjustment: parseFloat(document.getElementById("airHueAdjustment").value),
+          rotationSpeed: parseFloat(document.getElementById("rotationSpeed").value)
+        };
+        try {
+          const thumbnail = await generateThumbnail();
+          const data = { settings: settings, thumbnail: thumbnail };
+          const json = JSON.stringify(data, null, 2);
+          if(window.showSaveFilePicker){
+            try{
+              const fileHandle = await window.showSaveFilePicker({
+                suggestedName:"planet-data.json",
+                types:[{
+                  description:"JSON Files",
+                  accept: { "application/json": [".json"] }
+                }]
+              });
+              const writableStream = await fileHandle.createWritable();
+              await writableStream.write(json);
+              await writableStream.close();
+              alert("Planet data saved successfully!");
+            } catch(error){ console.error("Error saving file:", error); alert("File save cancelled or failed."); }
+          } else {
+            const blob = new Blob([json], { type:"application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url; anchor.download = "planet-data.json";
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            alert("Download initiated. Please check your downloads folder.");
+          }
+        } catch(err){ alert("Failed to generate thumbnail: "+err); }
+      }
+
+      async function loadPlanetData() {
+        if(window.showOpenFilePicker){
+          try{
+            const [fileHandle] = await window.showOpenFilePicker({
+              types:[{
+                description:"JSON Files",
+                accept: { "application/json": [".json"] }
+              }]
+            });
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const settings = data.settings || data;
+            for(let key in settings){
+              if(document.getElementById(key)){
+                document.getElementById(key).value = settings[key];
+              }
+            }
+            updatePlanetParameters();
+            createPlanet();
+            alert("Planet data loaded successfully!");
+          } catch(error){
+            console.error("Error loading file:", error);
+            alert("File load cancelled or failed.");
+          }
+        } else {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "application/json";
+          input.addEventListener("change", (e)=>{
+            const file = e.target.files[0];
+            if(!file)return;
+            const reader = new FileReader();
+            reader.onload = function(event){
+              try{
+                const data = JSON.parse(event.target.result);
+                const settings = data.settings || data;
+                for(let key in settings){
+                  if(document.getElementById(key)){
+                    document.getElementById(key).value = settings[key];
+                  }
+                }
+                updatePlanetParameters();
+                createPlanet();
+                alert("Planet data loaded successfully!");
+              } catch(err){ alert("Error parsing file: "+err); }
+            };
+            reader.readAsText(file);
+          });
+          input.click();
+        }
+      }
+
+      async function savePreset() {
+        if(presets.length>=10){
+          alert("Maximum of 10 presets reached. Delete one to save a new preset.");
+          return;
+        }
+        const presetSettings = {
+          seaLevel: parseFloat(document.getElementById("seaLevel").value),
+          noiseScale: parseFloat(document.getElementById("noiseScale").value),
+          mountainHeight: parseFloat(document.getElementById("mountainHeight").value),
+          temperature: parseFloat(document.getElementById("temperature").value),
+          atmosphereThickness: parseFloat(document.getElementById("atmosphereThickness").value),
+          atmosphereIntensity: parseFloat(document.getElementById("atmosphereIntensity").value),
+          cloudOpacity: parseFloat(document.getElementById("cloudOpacity").value),
+          cloudNoiseScale: parseFloat(document.getElementById("cloudNoiseScale").value),
+          sizeModifier: parseFloat(document.getElementById("sizeModifier").value),
+          landHueAdjustment: parseFloat(document.getElementById("landHueAdjustment").value),
+          seaHueAdjustment: parseFloat(document.getElementById("seaHueAdjustment").value),
+          airHueAdjustment: parseFloat(document.getElementById("airHueAdjustment").value),
+          rotationSpeed: parseFloat(document.getElementById("rotationSpeed").value)
+        };
+        try{
+          const thumbnail = await generateThumbnail();
+          const preset = { settings: presetSettings, thumbnail: thumbnail };
+          presets.push(preset);
+          addPresetThumbnail(preset, presets.length-1);
+        } catch(err){ alert("Failed to generate thumbnail: "+err); }
+      }
+
+      function addPresetThumbnail(preset, index) {
+        const container = document.getElementById("presetOverlay");
+        const item = document.createElement("div");
+        item.className = "presetItem";
+        item.dataset.index = index;
+        const img = document.createElement("img");
+        img.src = preset.thumbnail;
+        item.appendChild(img);
+        const editBtn = document.createElement("button");
+        editBtn.className = "editBtn";
+        editBtn.textContent = "✎";
+        editBtn.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          editPresetThumbnail(index);
+        });
+        item.appendChild(editBtn);
+        const delBtn = document.createElement("button");
+        delBtn.className = "deleteBtn";
+        delBtn.textContent = "X";
+        delBtn.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          deletePreset(index);
+        });
+        item.appendChild(delBtn);
+        item.addEventListener("click", ()=>{
+          loadPreset(preset.settings);
+        });
+        container.appendChild(item);
+      }
+
+      function editPresetThumbnail(index) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.addEventListener("change", (e)=>{
+          const file = e.target.files[0];
+          if(!file)return;
+          const reader = new FileReader();
+          reader.onload = function(event){
+            const newThumbnail = event.target.result;
+            presets[index].thumbnail = newThumbnail;
+            const presetItem = document.querySelector(`.presetItem[data-index="${index}"]`);
+            if(presetItem){
+              const img = presetItem.querySelector("img");
+              img.src = newThumbnail;
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+        input.click();
+      }
+
+      function loadPreset(settings) {
+        for(let key in settings){
+          if(document.getElementById(key)){
+            document.getElementById(key).value = settings[key];
+          }
+        }
+        updatePlanetParameters();
+        createPlanet();
+      }
+
+      function deletePreset(index) {
+        presets.splice(index,1);
+        const container = document.getElementById("presetOverlay");
+        container.innerHTML = "";
+        presets.forEach((preset, i)=>{
+          addPresetThumbnail(preset, i);
+        });
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+      }
+      window.addEventListener("resize", onWindowResize);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        if(cameraAnimationMode==="orbit"){
+          const elapsed = (performance.now()-cameraAnimationStartTime)/1000;
+          const period = 20;
+          const angle = (elapsed/period)*2*Math.PI*(-1);
+          const orbitRadiusX = sizeModifier*3;
+          const orbitRadiusZ = sizeModifier*2.5;
+          const x = orbitRadiusX*Math.cos(angle);
+          const z = orbitRadiusZ*Math.sin(angle);
+          const inclination = orbitConfig.inclination;
+          const y = (z*Math.sin(inclination)) + sizeModifier*0.5;
+          const zRotated = z*Math.cos(inclination);
+          camera.position.set(x, y, zRotated);
+          camera.lookAt(new THREE.Vector3(0,0,0));
+        } else if(cameraAnimationMode==="flight"){
+          updateFlightTour();
+        }
+        if(sphere){ sphere.rotation.y += rotationSpeed; }
+        if(window.orbitControls){ window.orbitControls.update(); }
+        composer.render();
+      }
+
+      function updatePlanetParameters() {
+        seaLevel = parseFloat(document.getElementById("seaLevel").value);
+        noiseScale = parseFloat(document.getElementById("noiseScale").value);
+        mountainHeight = parseFloat(document.getElementById("mountainHeight").value);
+        temperature = parseFloat(document.getElementById("temperature").value);
+        atmosphereThickness = parseFloat(document.getElementById("atmosphereThickness").value);
+        atmosphereIntensity = parseFloat(document.getElementById("atmosphereIntensity").value);
+        cloudOpacity = parseFloat(document.getElementById("cloudOpacity").value);
+        cloudNoiseScale = parseFloat(document.getElementById("cloudNoiseScale").value);
+        sizeModifier = parseFloat(document.getElementById("sizeModifier").value);
+        landHueAdjustment = parseFloat(document.getElementById("landHueAdjustment").value);
+        seaHueAdjustment = parseFloat(document.getElementById("seaHueAdjustment").value);
+        airHueAdjustment = parseFloat(document.getElementById("airHueAdjustment").value);
+        rotationSpeed = parseFloat(document.getElementById("rotationSpeed").value);
+      }
+
+      function resetHues() {
+        landHueAdjustment = 0; seaHueAdjustment = 0; airHueAdjustment = 0;
+        document.getElementById("landHueAdjustment").value = 0;
+        document.getElementById("seaHueAdjustment").value = 0;
+        document.getElementById("airHueAdjustment").value = 0;
+        createPlanet();
+      }
+
+      function randomizeParameters() {
+        document.getElementById("seaLevel").value = (Math.random()*0.15-0.05).toFixed(2);
+        document.getElementById("noiseScale").value = (Math.random()*6+2).toFixed(1);
+        document.getElementById("mountainHeight").value = (Math.random()*(0.1-0.02)+0.02).toFixed(2);
+        document.getElementById("temperature").value = (Math.random()*1.6-0.8).toFixed(1);
+        document.getElementById("atmosphereThickness").value = (Math.random()*(1.45-1.1)+1.1).toFixed(2);
+        document.getElementById("atmosphereIntensity").value = (Math.random()*0.2+0.1).toFixed(1);
+        document.getElementById("cloudOpacity").value = (Math.random()*0.3+0.1).toFixed(1);
+        document.getElementById("cloudNoiseScale").value = (Math.random()*2+1).toFixed(1);
+        document.getElementById("sizeModifier").value = (Math.random()*0.6+0.6).toFixed(2);
+        document.getElementById("landHueAdjustment").value = Math.floor(Math.random()*121)-60;
+        document.getElementById("seaHueAdjustment").value = Math.floor(Math.random()*121)-60;
+        document.getElementById("airHueAdjustment").value = Math.floor(Math.random()*121);
+        updatePlanetParameters();
+        createPlanet();
+      }
+
+      function regenerateFractal() {
+        seedOffset = Math.random()*1000;
+        createPlanet();
+      }
+
+      function addEventListeners() {
+        document.querySelectorAll("input[type=range]").forEach((input)=>{
+          input.addEventListener("input", ()=>{
+            if(updateTimeout) clearTimeout(updateTimeout);
+            updateTimeout = setTimeout(()=>{
+              updatePlanetParameters();
+              createPlanet();
+            },50);
+          });
+        });
+        document.getElementById("pixelSize").addEventListener("input", ()=>{
+          const value = parseFloat(document.getElementById("pixelSize").value);
+          pixelatePass.uniforms.pixelSize.value = value;
+        });
+        document.getElementById("celLevels").addEventListener("input", ()=>{
+          const value = parseFloat(document.getElementById("celLevels").value);
+          celShadingPass.uniforms.levels.value = value;
+        });
+        document.getElementById("enablePixelation").addEventListener("change", (e)=>{
+          pixelatePass.enabled = e.target.checked;
+        });
+        document.getElementById("enableCelShading").addEventListener("change", (e)=>{
+          celShadingPass.enabled = e.target.checked;
+        });
+        document.getElementById("enableRealisticStars").addEventListener("change", ()=>{
+          createStarfield();
+        });
+        document.getElementById("starColorMix").addEventListener("input", ()=>{
+          createStarfield();
+        });
+        document.getElementById("updateButton").addEventListener("click", ()=>{
+          updatePlanetParameters();
+          createPlanet();
+        });
+        document.getElementById("regenerateButton").addEventListener("click", regenerateFractal);
+        document.getElementById("resetHuesButton").addEventListener("click", resetHues);
+        document.getElementById("randomButton").addEventListener("click", randomizeParameters);
+        document.getElementById("exportButton").addEventListener("click", exportSettings);
+        document.getElementById("importButton").addEventListener("click", importSettings);
+        document.getElementById("saveFileButton").addEventListener("click", savePlanetData);
+        document.getElementById("loadFileButton").addEventListener("click", loadPlanetData);
+        document.getElementById("savePresetButton").addEventListener("click", savePreset);
+        document.getElementById("orbitButton").addEventListener("click", ()=>{
+          cameraAnimationMode = "orbit";
+          cameraAnimationStartTime = performance.now();
+          const incl = THREE.MathUtils.degToRad(15+Math.random()*30);
+          orbitConfig = { inclination: incl };
+        });
+        document.getElementById("flightTourButton").addEventListener("click", ()=>{
+          flightCurve = createFlightCurve();
+          previousTangent.copy(flightCurve.getTangentAt(0).normalize());
+          cameraAnimationMode = "flight";
+          cameraAnimationStartTime = performance.now();
+        });
+        document.getElementById("stopCameraButton").addEventListener("click", ()=>{
+          cameraAnimationMode = "none";
+          camera.position.copy(originalCameraPosition);
+          camera.lookAt(originalCameraTarget);
+        });
+      }
+
+      function init() {
+        camera.position.copy(originalCameraPosition);
+        camera.lookAt(originalCameraTarget);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        // Instantiate our enhanced orbit controls and attach globally.
+        window.orbitControls = new NovelOrbitControls(camera, renderer.domElement);
+        // Lights
+        scene.add(new THREE.AmbientLight(0x404040, 0.5));
+        sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(-10, 5, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.bias = -0.0001;
+        sunLight.shadow.camera.left = -15;
+        sunLight.shadow.camera.right = 15;
+        sunLight.shadow.camera.top = 15;
+        sunLight.shadow.camera.bottom = -15;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 50;
+        scene.add(sunLight);
+        const sunGlow = createGlowSprite(10, "rgba(255,255,200,1)");
+        sunGlow.position.copy(sunLight.position);
+        scene.add(sunGlow);
+        createPlanet();
+        createStarfield();
+        animate();
+      }
+
+      return { init, addEventListeners, updatePlanetParameters, createPlanet };
+    })();
+
+    // Initialize the app and register event listeners.
+    PlanetApp.init();
+    PlanetApp.addEventListeners();
+  </script>
+</body>
+</html>
