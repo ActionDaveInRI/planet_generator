@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cross-Platform 3D Earthlike Planet</title>
+  
+  <!-- Import map for Three.js -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+    }
+  }
+  </script>
+  
+  <!-- Retro dot-matrix font: VT323 -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  
+  <style>
+    body, #controls {
+      font-family: 'VT323', "Courier New", Courier, monospace;
+    }
+    #controls { font-size: 24px; }
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 320px;
+      height: calc(100% - 20px);
+      background: #222;
+      color: #ddd;
+      border-radius: 12px;
+      box-shadow: 0px 4px 12px rgba(0,0,0,0.8);
+      overflow-y: auto;
+      z-index: 100;
+    }
+    .collapsible-section {
+      border-bottom: 1px solid #444;
+      margin: 4px 0;
+    }
+    .collapsible-header {
+      cursor: pointer;
+      padding: 8px 12px;
+      background: #111;
+      user-select: none;
+      display: flex;
+      align-items: center;
+    }
+    .toggle-icon {
+      display: inline-block;
+      transition: transform 0.2s ease;
+      margin-right: 8px;
+    }
+    .collapsible-content {
+      padding: 10px 15px;
+      overflow-y: auto;
+    }
+    .control-group {
+      margin-bottom: 12px;
+    }
+    .control-group label {
+      display: block;
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+    .control-group input[type="range"],
+    .control-group input[type="checkbox"],
+    .control-group input[type="color"],
+    .collapsible-content button {
+      width: 100%;
+      background: #333;
+      color: #ddd;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 6px;
+      box-sizing: border-box;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    #presetOverlay {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      z-index: 200;
+      padding: 5px;
+      border-radius: 8px;
+    }
+    .presetItem {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      border: 1px solid #ccc;
+      overflow: hidden;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .presetItem img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .presetItem button.deleteBtn,
+    .presetItem button.editBtn {
+      position: absolute;
+      top: 2px;
+      background: rgba(255, 0, 0, 0.8);
+      border: none;
+      color: white;
+      font-size: 18px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .presetItem button.editBtn { left: 2px; background: rgba(0, 0, 0, 0.6); }
+    .presetItem button.deleteBtn { right: 2px; }
+    @media (max-width:600px) {
+      #controls { width: 90%; left: 5%; }
+      #presetOverlay { right: 5px; bottom: 5px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Controls Panel -->
+  <div id="controls">
+    <div id="controlsContent">
+      <!-- Camera Controls -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Camera Controls
+        </div>
+        <div class="collapsible-content">
+          <div class="camera-animation-controls">
+            <button id="orbitButton">Orbit</button>
+            <button id="stopCameraButton">Reset View</button>
+            <button id="flightTourButton">Flight Tour</button>
+          </div>
+        </div>
+      </div>
+      <!-- Planet Colors (Moved above Stats) -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Planet Colors
+        </div>
+        <div class="collapsible-content">
+          <div class="control-group">
+            <label for="landColorPicker">Land Color (Tint):</label>
+            <input type="color" id="landColorPicker" value="#ffffff">
+          </div>
+          <div class="control-group">
+            <label for="seaColorPicker">Water Color:</label>
+            <input type="color" id="seaColorPicker" value="#001f3f">
+          </div>
+          <div class="control-group">
+            <label for="airColorPicker">Atmosphere Color:</label>
+            <input type="color" id="airColorPicker" value="#ffffff">
+          </div>
+          <div class="control-group">
+            <label for="cloudColorPicker">Cloud Color (Tint):</label>
+            <input type="color" id="cloudColorPicker" value="#ffffff">
+          </div>
+          <button id="resetHuesButton">Reset Colors</button>
+        </div>
+      </div>
+      <!-- Planet Stats (Full Rebuild Controls) -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Planet Stats
+        </div>
+        <div class="collapsible-content">
+          <!-- Random Planet Button -->
+          <button id="randomButton">Random Planet</button>
+          <div class="control-group">
+            <label for="seaLevel">Sea Level:</label>
+            <input type="range" id="seaLevel" min="-0.1" max="0.1" step="0.01" value="0.00">
+          </div>
+          <div class="control-group">
+            <label for="noiseScale">Surface Detail:</label>
+            <input type="range" id="noiseScale" min="1" max="10" step="0.1" value="2.5">
+          </div>
+          <div class="control-group">
+            <label for="mountainHeight">Mountain Height:</label>
+            <input type="range" id="mountainHeight" min="0" max="0.2" step="0.01" value="0.06">
+          </div>
+          <div class="control-group">
+            <label for="temperature">Temperature (Colder/Hotter):</label>
+            <input type="range" id="temperature" min="-1" max="1" step="0.1" value="0">
+          </div>
+          <div class="control-group">
+            <label for="sizeModifier">Size Modifier:</label>
+            <input type="range" id="sizeModifier" min="0.5" max="1.5" step="0.01" value="1.13">
+          </div>
+          <div class="control-group">
+            <label for="rotationSpeed">Rotation Speed:</label>
+            <input type="range" id="rotationSpeed" min="0" max="0.01" step="0.0001" value="0.001">
+          </div>
+          <div class="control-group">
+            <label for="atmosphereThickness">Atmosphere Thickness:</label>
+            <input type="range" id="atmosphereThickness" min="1.01" max="1.5" step="0.01" value="1.33">
+          </div>
+          <div class="control-group">
+            <label for="atmosphereIntensity">Atmosphere Intensity:</label>
+            <input type="range" id="atmosphereIntensity" min="0" max="1" step="0.1" value="0.2">
+          </div>
+          <div class="control-group">
+            <label for="cloudOpacity">Cloud Opacity:</label>
+            <input type="range" id="cloudOpacity" min="0" max="1" step="0.1" value="0.1">
+          </div>
+          <div class="control-group">
+            <label for="cloudNoiseScale">Cloud Detail:</label>
+            <input type="range" id="cloudNoiseScale" min="1" max="5" step="0.1" value="1.6">
+          </div>
+        </div>
+      </div>
+      <!-- Post-Processing Effects (Live Update) -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Post-Processing Effects
+        </div>
+        <div class="collapsible-content">
+          <div class="control-group">
+            <label><input type="checkbox" id="enablePixelation" checked> Enable Pixelation</label>
+          </div>
+          <div class="control-group">
+            <label for="pixelSize">Pixelation Size:</label>
+            <input type="range" id="pixelSize" min="0" max="50" step="1" value="10">
+          </div>
+          <div class="control-group">
+            <label><input type="checkbox" id="enableCelShading" checked> Enable Cel Shading</label>
+          </div>
+          <div class="control-group">
+            <label for="celLevels">Cel Shading Levels:</label>
+            <input type="range" id="celLevels" min="0" max="10" step="1" value="5">
+          </div>
+        </div>
+      </div>
+      <!-- Star Settings (Live Update) -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Star Settings
+        </div>
+        <div class="collapsible-content">
+          <div class="control-group">
+            <label><input type="checkbox" id="enableRealisticStars" checked> Enable Realistic Star Colors</label>
+          </div>
+          <div class="control-group">
+            <label for="starColorMix">Star Color Mix (0 = realistic, 1 = random):</label>
+            <input type="range" id="starColorMix" min="0" max="1" step="0.01" value="0.5">
+          </div>
+          <div class="control-group">
+            <label for="starSize">Star Size:</label>
+            <input type="range" id="starSize" min="0.1" max="2.1" step="0.1" value="1.8">
+          </div>
+          <div class="control-group">
+            <label for="starCount">Star Count:</label>
+            <input type="range" id="starCount" min="1000" max="50000" step="1000" value="10000">
+          </div>
+        </div>
+      </div>
+      <!-- File Operations -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> File Operations
+        </div>
+        <div class="collapsible-content">
+          <button id="saveFileButton">Save Planet Data</button>
+          <button id="loadFileButton">Load Planet Data</button>
+        </div>
+      </div>
+      <!-- Presets -->
+      <div class="collapsible-section">
+        <div class="collapsible-header">
+          <span class="toggle-icon">▼</span> Presets
+        </div>
+        <div class="collapsible-content">
+          <button id="savePresetButton">Save Preset</button>
+          <button id="exportPresetsButton">Export Presets as JSON</button>
+          <button id="importPresetsButton">Import Presets from File</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Preset Overlay -->
+  <div id="presetOverlay"></div>
+  
+  <!-- Simplex Noise Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+  
+  <!-- Main App Script -->
+  <script type="module">
+    import * as THREE from "three";
+    import { EffectComposer } from "https://threejs.org/examples/jsm/postprocessing/EffectComposer.js";
+    import { RenderPass } from "https://threejs.org/examples/jsm/postprocessing/RenderPass.js";
+    import { ShaderPass } from "https://threejs.org/examples/jsm/postprocessing/ShaderPass.js";
+    
+    // Log THREE version to confirm loading
+    console.log("THREE version:", THREE.REVISION);
+    
+    // -------------------------
+    // Helper: Blend Color Adjustment
+    // -------------------------
+    function blendColorAdjustment(color, tint, factor) {
+      const white = new THREE.Color(0xffffff);
+      if (tint.equals(white)) return;
+      color.lerp(tint, factor);
+    }
+    
+    // -------------------------
+    // Novel Orbit Controls (with touch support)
+    // -------------------------
+    class NovelOrbitControls {
+      constructor(camera, domElement) {
+        this.camera = camera;
+        this.domElement = domElement;
+        this.target = new THREE.Vector3(0, 0, 0);
+        const offset = camera.position.clone().sub(this.target);
+        this.spherical = new THREE.Spherical().setFromVector3(offset);
+        this.initialSpherical = this.spherical.clone();
+        this.rotateSpeed = 1.0;
+        this.zoomSpeed = 1.0;
+        this.dampingFactor = 0.1;
+        this.velocity = new THREE.Vector2(0, 0);
+        this.isLeftDragging = false;
+        this.leftLastPosition = new THREE.Vector2();
+        this.isRightDragging = false;
+        this.rightLastPosition = new THREE.Vector2();
+        this.minDistance = 0;
+        this.maxDistance = 30;
+        this.userInteracted = false;
+    
+        // Mouse events
+        this.domElement.addEventListener("mousedown", (e) => {
+          this.userInteracted = true;
+          if (typeof window.cancelAutoAnimation === "function") {
+            window.cancelAutoAnimation();
+          }
+          if (e.button === 0) {
+            this.isLeftDragging = true;
+            this.leftLastPosition.set(e.clientX, e.clientY);
+          } else if (e.button === 2) {
+            this.isRightDragging = true;
+            this.rightLastPosition.set(e.clientX, e.clientY);
+          }
+        }, false);
+        this.domElement.addEventListener("mousemove", this.onMouseMove.bind(this), false);
+        this.domElement.addEventListener("mouseup", this.onMouseUp.bind(this), false);
+        this.domElement.addEventListener("wheel", this.onMouseWheel.bind(this), false);
+        this.domElement.addEventListener("contextmenu", (e) => { e.preventDefault(); }, false);
+    
+        // Touch events
+        this.domElement.addEventListener("touchstart", this.onTouchStart.bind(this), false);
+        this.domElement.addEventListener("touchmove", this.onTouchMove.bind(this), false);
+        this.domElement.addEventListener("touchend", this.onTouchEnd.bind(this), false);
+      }
+      onMouseMove(event) {
+        if (this.isLeftDragging) {
+          const deltaX = event.clientX - this.leftLastPosition.x;
+          const deltaY = event.clientY - this.leftLastPosition.y;
+          this.leftLastPosition.set(event.clientX, event.clientY);
+          this.velocity.x = -deltaX * 0.005 * this.rotateSpeed;
+          this.velocity.y = -deltaY * 0.005 * this.rotateSpeed;
+          this.spherical.theta += this.velocity.x;
+          this.spherical.phi += this.velocity.y;
+          this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
+          this.updateCamera();
+        } else if (this.isRightDragging) {
+          const deltaX = event.clientX - this.rightLastPosition.x;
+          const deltaY = event.clientY - this.rightLastPosition.y;
+          this.rightLastPosition.set(event.clientX, event.clientY);
+          const panSpeed = (this.spherical.radius * Math.tan((this.camera.fov * Math.PI / 180) / 2)) / (window.innerHeight / 2);
+          const panOffset = new THREE.Vector3();
+          const right = new THREE.Vector3();
+          this.camera.getWorldDirection(right);
+          right.cross(this.camera.up).normalize();
+          const up = new THREE.Vector3();
+          up.copy(this.camera.up).normalize();
+          panOffset.add(right.multiplyScalar(-deltaX * panSpeed));
+          panOffset.add(up.multiplyScalar(deltaY * panSpeed));
+          this.target.add(panOffset);
+          this.updateCamera();
+        }
+      }
+      onMouseUp(event) {
+        if (event.button === 0) { this.isLeftDragging = false; }
+        else if (event.button === 2) { this.isRightDragging = false; }
+      }
+      onMouseWheel(event) {
+        this.spherical.radius += event.deltaY * 0.01 * this.zoomSpeed;
+        this.spherical.radius = THREE.MathUtils.clamp(this.spherical.radius, this.minDistance, this.maxDistance);
+        this.updateCamera();
+      }
+      onTouchStart(event) {
+        event.preventDefault();
+        if (event.touches.length === 1) {
+          this.isLeftDragging = true;
+          this.leftLastPosition.set(event.touches[0].clientX, event.touches[0].clientY);
+        }
+      }
+      onTouchMove(event) {
+        event.preventDefault();
+        if (this.isLeftDragging && event.touches.length === 1) {
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - this.leftLastPosition.x;
+          const deltaY = touch.clientY - this.leftLastPosition.y;
+          this.leftLastPosition.set(touch.clientX, touch.clientY);
+          this.velocity.x = -deltaX * 0.005 * this.rotateSpeed;
+          this.velocity.y = -deltaY * 0.005 * this.rotateSpeed;
+          this.spherical.theta += this.velocity.x;
+          this.spherical.phi += this.velocity.y;
+          this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
+          this.updateCamera();
+        }
+      }
+      onTouchEnd(event) {
+        event.preventDefault();
+        this.isLeftDragging = false;
+      }
+      updateCamera() {
+        const newPos = new THREE.Vector3().setFromSpherical(this.spherical).add(this.target);
+        this.camera.position.copy(newPos);
+        this.camera.lookAt(this.target);
+      }
+      update() {
+        if (!this.isLeftDragging && !this.isRightDragging) {
+          this.velocity.multiplyScalar(1 - this.dampingFactor);
+          if (this.velocity.length() > 0.0001) {
+            this.spherical.theta += this.velocity.x;
+            this.spherical.phi += this.velocity.y;
+            this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
+            this.updateCamera();
+          }
+        }
+      }
+      reset() {
+        this.spherical.copy(this.initialSpherical);
+        this.target.set(0, 0, 0);
+        this.updateCamera();
+      }
+    }
+    
+    // -------------------------
+    // Postprocessing Passes
+    // -------------------------
+    class PixelatePass extends ShaderPass {
+      constructor({ pixelSize = 10, resolution = new THREE.Vector2(window.innerWidth, window.innerHeight) } = {}) {
+        const pixelateShader = {
+          uniforms: {
+            tDiffuse: { value: null },
+            pixelSize: { value: pixelSize },
+            resolution: { value: resolution }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float pixelSize;
+            uniform vec2 resolution;
+            varying vec2 vUv;
+            void main() {
+              if(pixelSize < 0.01) {
+                gl_FragColor = texture2D(tDiffuse, vUv);
+              } else {
+                vec2 dxy = pixelSize / resolution;
+                vec2 coord = dxy * floor(vUv / dxy) + dxy * 0.5;
+                gl_FragColor = texture2D(tDiffuse, coord);
+              }
+            }
+          `
+        };
+        super(pixelateShader);
+        this.uniforms.pixelSize.value = pixelSize;
+        this.uniforms.resolution.value = resolution;
+      }
+    }
+    
+    class CelShadingPass extends ShaderPass {
+      constructor({ levels = 5 } = {}) {
+        const celShader = {
+          uniforms: {
+            tDiffuse: { value: null },
+            levels: { value: levels }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float levels;
+            varying vec2 vUv;
+            void main() {
+              if(levels < 0.01) {
+                gl_FragColor = texture2D(tDiffuse, vUv);
+              } else {
+                vec4 color = texture2D(tDiffuse, vUv);
+                color.rgb = floor(color.rgb * levels) / levels;
+                gl_FragColor = color;
+              }
+            }
+          `
+        };
+        super(celShader);
+        this.uniforms.levels.value = levels;
+      }
+    }
+    
+    // -------------------------
+    // Unified Settings System
+    // -------------------------
+    function getSettings() {
+      return {
+        seaLevel: parseFloat(document.getElementById("seaLevel").value),
+        noiseScale: parseFloat(document.getElementById("noiseScale").value),
+        mountainHeight: parseFloat(document.getElementById("mountainHeight").value),
+        temperature: parseFloat(document.getElementById("temperature").value),
+        sizeModifier: parseFloat(document.getElementById("sizeModifier").value),
+        rotationSpeed: parseFloat(document.getElementById("rotationSpeed").value),
+        atmosphereThickness: parseFloat(document.getElementById("atmosphereThickness").value),
+        atmosphereIntensity: parseFloat(document.getElementById("atmosphereIntensity").value),
+        cloudOpacity: parseFloat(document.getElementById("cloudOpacity").value),
+        cloudNoiseScale: parseFloat(document.getElementById("cloudNoiseScale").value),
+        landColor: document.getElementById("landColorPicker").value,
+        seaColor: document.getElementById("seaColorPicker").value,
+        airColor: document.getElementById("airColorPicker").value,
+        cloudColor: document.getElementById("cloudColorPicker").value,
+        starCount: parseInt(document.getElementById("starCount").value),
+        starSize: parseFloat(document.getElementById("starSize").value),
+        starColorMix: parseFloat(document.getElementById("starColorMix").value)
+      };
+    }
+    function setSettings(settings) {
+      document.getElementById("seaLevel").value = settings.seaLevel;
+      document.getElementById("noiseScale").value = settings.noiseScale;
+      document.getElementById("mountainHeight").value = settings.mountainHeight;
+      document.getElementById("temperature").value = settings.temperature;
+      document.getElementById("sizeModifier").value = settings.sizeModifier;
+      document.getElementById("rotationSpeed").value = settings.rotationSpeed;
+      document.getElementById("atmosphereThickness").value = settings.atmosphereThickness;
+      document.getElementById("atmosphereIntensity").value = settings.atmosphereIntensity;
+      document.getElementById("cloudOpacity").value = settings.cloudOpacity;
+      document.getElementById("cloudNoiseScale").value = settings.cloudNoiseScale;
+      document.getElementById("landColorPicker").value = settings.landColor;
+      document.getElementById("seaColorPicker").value = settings.seaColor;
+      document.getElementById("airColorPicker").value = settings.airColor;
+      document.getElementById("cloudColorPicker").value = settings.cloudColor;
+      document.getElementById("starCount").value = settings.starCount;
+      document.getElementById("starSize").value = settings.starSize;
+      document.getElementById("starColorMix").value = settings.starColorMix;
+    }
+    
+    // -------------------------
+    // PlanetApp Module
+    // -------------------------
+    const PlanetApp = (() => {
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x000000, 0.0005);
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      const noise = new SimplexNoise();
+    
+      const composer = new EffectComposer(renderer);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+      const pixelatePass = new PixelatePass({ pixelSize: 10, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+      composer.addPass(pixelatePass);
+      const celShadingPass = new CelShadingPass({ levels: 5 });
+      composer.addPass(celShadingPass);
+    
+      let starField;
+      let seaLevel = -0.02, noiseScale = 4, mountainHeight = 0.08, temperature = 0.0,
+          sizeModifier = 1, rotationSpeed = 0.001,
+          atmosphereThickness = 1.2, atmosphereIntensity = 0.4,
+          cloudOpacity = 0.4, cloudNoiseScale = 3;
+      let landColorAdjustment = new THREE.Color("#ffffff");
+      let seaColorAdjustment = new THREE.Color("#001f3f");
+      let airColorAdjustment = new THREE.Color("#ffffff");
+      let cloudColorAdjustment = new THREE.Color("#ffffff");
+    
+      let sphere, planetGroup, sunLight;
+      let seedOffset = 0;
+      const presets = [];
+    
+      // Preset persistence helpers using localStorage
+      function persistPresets() {
+        localStorage.setItem("planetPresets", JSON.stringify(presets));
+      }
+      function loadPresetsFromStorage() {
+        const stored = localStorage.getItem("planetPresets");
+        if (stored) {
+          const savedPresets = JSON.parse(stored);
+          presets.length = 0;
+          document.getElementById("presetOverlay").innerHTML = "";
+          savedPresets.forEach((preset, index) => {
+            presets.push(preset);
+            addPresetThumbnail(preset, index);
+          });
+        }
+      }
+      // Expose a helper to replace presets from imported JSON
+      function setPresets(newPresets) {
+        presets.length = 0;
+        presets.push(...newPresets);
+        const container = document.getElementById("presetOverlay");
+        container.innerHTML = "";
+        presets.forEach((preset, i) => {
+          addPresetThumbnail(preset, i);
+        });
+        persistPresets();
+      }
+    
+      // Global camera animation variables
+      window.cameraAnimationMode = "none";
+      window.cameraAnimationStartTime = 0;
+      window.orbitConfig = null;
+      window.flightCurve = null;
+      window.previousTangent = new THREE.Vector3(0, 0, 1);
+    
+      const originalCameraPosition = new THREE.Vector3(-1.2, 0, 3);
+      const originalCameraTarget = new THREE.Vector3(0, 0, 0);
+      let updateTimeout = null;
+    
+      function smoothStep(x, edge0, edge1) {
+        let t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+        return t * t * (3 - 2 * t);
+      }
+      function createGlowSprite(size, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128;
+        canvas.height = 128;
+        const context = canvas.getContext("2d");
+        const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 128, 128);
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, blending: THREE.AdditiveBlending, transparent: true });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(size, size, 1);
+        return sprite;
+      }
+      function getRealisticStarColor() {
+        let t = Math.random();
+        let color = new THREE.Color();
+        if (t < 0.5) {
+          let alpha = t / 0.5;
+          color.lerpColors(new THREE.Color(1, 1, 1), new THREE.Color(1, 1, 0.6), alpha);
+        } else {
+          let alpha = (t - 0.5) / 0.5;
+          color.lerpColors(new THREE.Color(1, 1, 0.6), new THREE.Color(1, 0.6, 0.4), alpha);
+        }
+        return color;
+      }
+      function createStarfield() {
+        if (starField) { scene.remove(starField); }
+        const count = parseInt(document.getElementById("starCount").value);
+        const starGeometry = new THREE.BufferGeometry();
+        const positions = [];
+        const colors = [];
+        const realisticEnabled = document.getElementById("enableRealisticStars").checked;
+        const mixValue = realisticEnabled ? parseFloat(document.getElementById("starColorMix").value) : 1;
+        const starSize = parseFloat(document.getElementById("starSize").value);
+        for (let i = 0; i < count; i++) {
+          positions.push(
+            (Math.random() - 0.5) * 2000,
+            (Math.random() - 0.5) * 2000,
+            (Math.random() - 0.5) * 2000
+          );
+          const realisticColor = getRealisticStarColor();
+          const randomColor = new THREE.Color(Math.random(), Math.random(), Math.random());
+          const finalColor = realisticColor.clone().lerp(randomColor, mixValue);
+          colors.push(finalColor.r, finalColor.g, finalColor.b);
+        }
+        starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        starGeometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        const starMaterial = new THREE.PointsMaterial({ size: starSize, vertexColors: true });
+        starField = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starField);
+      }
+      function createPlanet() {
+        if (planetGroup) { scene.remove(planetGroup); }
+        const geometry = new THREE.SphereGeometry(sizeModifier, 2048, 2048);
+        const colors = [];
+        const position = geometry.attributes.position;
+        const desertColor = new THREE.Color(0xc2b280);
+        const tropicalColor = new THREE.Color(0x556b2f);
+        const temperateColor = new THREE.Color(0x8f9779);
+        const iceColor = new THREE.Color(0xf5f5f5);
+    
+        for (let i = 0; i < position.count; i++) {
+          const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+          const height = noise.noise3D(x * noiseScale + seedOffset, y * noiseScale + seedOffset, z * noiseScale + seedOffset) * mountainHeight;
+          position.setXYZ(i, x * (1 + height), y * (1 + height), z * (1 + height));
+          const latitude = Math.asin(y / Math.sqrt(x * x + y * y + z * z));
+          const color = new THREE.Color();
+    
+          if (height <= seaLevel) {
+            color.copy(seaColorAdjustment);
+          } else {
+            let baseline = (Math.abs(latitude) < Math.PI / 4) ? new THREE.Color(0x556b2f) : new THREE.Color(0x8f9779);
+            if (temperature >= 0) {
+              baseline.lerp(new THREE.Color(0xc2b280), temperature);
+            } else {
+              baseline.lerp(new THREE.Color(0xf5f5f5), THREE.MathUtils.clamp(-temperature / 0.5, 0, 1));
+            }
+            color.copy(baseline);
+            blendColorAdjustment(color, landColorAdjustment, 0.3);
+          }
+          colors.push(color.r, color.g, color.b);
+        }
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        geometry.attributes.color.needsUpdate = true;
+        const material = new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 1.0,
+          metalness: 0.0,
+        });
+        sphere = new THREE.Mesh(geometry, material);
+        sphere.castShadow = true;
+        sphere.receiveShadow = true;
+        planetGroup = new THREE.Group();
+        planetGroup.add(sphere);
+        addAtmosphere();
+        createCloudLayers(atmosphereThickness * sizeModifier);
+        scene.add(planetGroup);
+      }
+      function addAtmosphere() {
+        if (atmosphereIntensity === 0) return;
+        const atmosphereGeometry = new THREE.SphereGeometry(atmosphereThickness * sizeModifier, 2048, 2048);
+        const atmosphereMaterial = new THREE.MeshPhongMaterial({
+          color: 0x87cefa,
+          transparent: true,
+          opacity: atmosphereIntensity,
+          emissive: 0x1e90ff,
+          emissiveIntensity: 0.15,
+          side: THREE.BackSide,
+        });
+        atmosphereMaterial.color.copy(airColorAdjustment);
+        const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        sphere.add(atmosphere);
+      }
+      function createCloudLayers(baseRadius) {
+        for (let i = 0; i < 2; i++) {
+          const layerRadius = baseRadius + 0.05 + i * 0.01;
+          const layerNoiseScale = cloudNoiseScale * (1 - i * 0.33);
+          const layerOpacity = cloudOpacity * (1 - i * 0.25);
+          const cloudLayer = createCloudLayer(layerRadius, layerNoiseScale, layerOpacity, new THREE.Color(document.getElementById("cloudColorPicker").value));
+          sphere.add(cloudLayer);
+        }
+      }
+      function createCloudLayer(radius, noiseScaleFactor, opacity, tint) {
+        const cloudGeometry = new THREE.SphereGeometry(radius, 2048, 2048);
+        const cloudColors = [];
+        const positions = cloudGeometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+          const noiseValue = noise.noise3D(x * noiseScaleFactor, y * noiseScaleFactor, z * noiseScaleFactor) * 0.5 + 0.5;
+          const color = new THREE.Color(0xffffff).lerp(new THREE.Color(0x000000), 1 - noiseValue);
+          blendColorAdjustment(color, tint, 0.3);
+          cloudColors.push(color.r, color.g, color.b);
+        }
+        cloudGeometry.setAttribute("color", new THREE.Float32BufferAttribute(cloudColors, 3));
+        return new THREE.Mesh(cloudGeometry, new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: opacity,
+        }));
+      }
+      function createFlightCurve() {
+        const points = [];
+        const flightAltitude = sizeModifier * 0.5;
+        const flightRadius = sizeModifier * 1.1;
+        for (let i = 0; i < 8; i++) {
+          const angle = (i / 8) * Math.PI * 2;
+          points.push(new THREE.Vector3(flightRadius * Math.cos(angle), flightAltitude, flightRadius * Math.sin(angle)));
+        }
+        return new THREE.CatmullRomCurve3(points, true);
+      }
+      function updateFlightTour() {
+        const elapsed = (performance.now() - window.cameraAnimationStartTime) / 1000;
+        const flightDuration = 80;
+        const t = (elapsed % flightDuration) / flightDuration;
+        const pos = window.flightCurve.getPointAt(t);
+        let tangent = window.flightCurve.getTangentAt(t).clone().normalize();
+        if (window.previousTangent.dot(tangent) < 0) { tangent.negate(); }
+        window.previousTangent.copy(tangent);
+        let toCenter = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), pos).normalize();
+        let combinedForward = new THREE.Vector3().addVectors(tangent.multiplyScalar(0.8), toCenter.multiplyScalar(0.6)).normalize();
+        const rollAngle = THREE.MathUtils.degToRad(-70);
+        const rollQuat = new THREE.Quaternion().setFromAxisAngle(combinedForward, rollAngle);
+        const desiredUp = new THREE.Vector3(0, 1, 0).applyQuaternion(rollQuat);
+        let m = new THREE.Matrix4();
+        m.lookAt(pos, pos.clone().add(combinedForward), desiredUp);
+        let desiredQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+        camera.quaternion.slerp(desiredQuat, 0.1);
+        camera.position.copy(pos);
+      }
+      function generateThumbnail() {
+        return new Promise((resolve, reject) => {
+          composer.render();
+          const fullDataURL = renderer.domElement.toDataURL("image/png");
+          const img = new Image();
+          img.onload = () => {
+            const canvasWidth = renderer.domElement.width;
+            const canvasHeight = renderer.domElement.height;
+            const cropSize = Math.min(canvasWidth, canvasHeight);
+            const cropX = (canvasWidth - cropSize) / 2;
+            const cropY = (canvasHeight - cropSize) / 2;
+            const thumbCanvas = document.createElement("canvas");
+            const thumbSize = 120;
+            thumbCanvas.width = thumbSize;
+            thumbCanvas.height = thumbSize;
+            const ctx = thumbCanvas.getContext("2d");
+            ctx.drawImage(img, cropX, cropY, cropSize, cropSize, 0, 0, thumbSize, thumbSize);
+            resolve(thumbCanvas.toDataURL("image/png"));
+          };
+          img.onerror = reject;
+          img.src = fullDataURL;
+        });
+      }
+      function regenerateFractal() {
+        seedOffset = Math.random() * 1000;
+        createPlanet();
+      }
+      function updatePlanetParameters() {
+        const settings = getSettings();
+        seaLevel = settings.seaLevel;
+        noiseScale = settings.noiseScale;
+        mountainHeight = settings.mountainHeight;
+        temperature = settings.temperature;
+        sizeModifier = settings.sizeModifier;
+        rotationSpeed = settings.rotationSpeed;
+        atmosphereThickness = settings.atmosphereThickness;
+        atmosphereIntensity = settings.atmosphereIntensity;
+        cloudOpacity = settings.cloudOpacity;
+        cloudNoiseScale = settings.cloudNoiseScale;
+        landColorAdjustment = new THREE.Color(settings.landColor);
+        seaColorAdjustment = new THREE.Color(settings.seaColor);
+        airColorAdjustment = new THREE.Color(settings.airColor);
+        cloudColorAdjustment = new THREE.Color(settings.cloudColor);
+      }
+      function exportSettings() {
+        const settings = getSettings();
+        console.log(JSON.stringify(settings));
+      }
+      async function savePlanetData() {
+        const settings = getSettings();
+        try {
+          const thumbnail = await generateThumbnail();
+          const data = { settings: settings, thumbnail: thumbnail };
+          const json = JSON.stringify(data, null, 2);
+          if (window.showSaveFilePicker) {
+            try {
+              const fileHandle = await window.showSaveFilePicker({
+                suggestedName: "planet-data.json",
+                types: [{
+                  description: "JSON Files",
+                  accept: { "application/json": [".json"] }
+                }]
+              });
+              const writableStream = await fileHandle.createWritable();
+              await writableStream.write(json);
+              await writableStream.close();
+              alert("Planet data saved successfully!");
+            } catch (error) {
+              console.error("Error saving file:", error);
+              alert("File save cancelled or failed.");
+            }
+          } else {
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = "planet-data.json";
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            alert("Download initiated. Please check your downloads folder.");
+          }
+        } catch (err) {
+          alert("Failed to generate thumbnail: " + err);
+        }
+      }
+      async function loadPlanetData() {
+        if (window.showOpenFilePicker) {
+          try {
+            const [fileHandle] = await window.showOpenFilePicker({
+              types: [{
+                description: "JSON Files",
+                accept: { "application/json": [".json"] }
+              }]
+            });
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const settings = data.settings || data;
+            setSettings(settings);
+            updatePlanetParameters();
+            createPlanet();
+            alert("Planet data loaded successfully!");
+          } catch (error) {
+            console.error("Error loading file:", error);
+            alert("File load cancelled or failed.");
+          }
+        } else {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "application/json";
+          input.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+              try {
+                const data = JSON.parse(event.target.result);
+                const settings = data.settings || data;
+                setSettings(settings);
+                updatePlanetParameters();
+                createPlanet();
+                alert("Planet data loaded successfully!");
+              } catch (err) {
+                alert("Error parsing file: " + err);
+              }
+            };
+            reader.readAsText(file);
+          });
+          input.click();
+        }
+      }
+      async function savePreset() {
+        if (presets.length >= 10) {
+          alert("Maximum of 10 presets reached. Delete one to save a new preset.");
+          return;
+        }
+        const settings = getSettings();
+        try {
+          const thumbnail = await generateThumbnail();
+          const preset = { settings: settings, thumbnail: thumbnail };
+          presets.push(preset);
+          addPresetThumbnail(preset, presets.length - 1);
+          persistPresets();
+        } catch (err) {
+          alert("Failed to generate thumbnail: " + err);
+        }
+      }
+      function addPresetThumbnail(preset, index) {
+        const container = document.getElementById("presetOverlay");
+        const item = document.createElement("div");
+        item.className = "presetItem";
+        item.dataset.index = index;
+        const img = document.createElement("img");
+        img.src = preset.thumbnail;
+        item.appendChild(img);
+        const editBtn = document.createElement("button");
+        editBtn.className = "editBtn";
+        editBtn.textContent = "✎";
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          editPresetThumbnail(index);
+        });
+        item.appendChild(editBtn);
+        const delBtn = document.createElement("button");
+        delBtn.className = "deleteBtn";
+        delBtn.textContent = "X";
+        delBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deletePreset(index);
+        });
+        item.appendChild(delBtn);
+        item.addEventListener("click", () => {
+          loadPreset(preset.settings);
+        });
+        container.appendChild(item);
+      }
+      function editPresetThumbnail(index) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function(event) {
+            const newThumbnail = event.target.result;
+            presets[index].thumbnail = newThumbnail;
+            const presetItem = document.querySelector(`.presetItem[data-index="${index}"]`);
+            if (presetItem) {
+              const img = presetItem.querySelector("img");
+              img.src = newThumbnail;
+            }
+            persistPresets();
+          };
+          reader.readAsDataURL(file);
+        });
+        input.click();
+      }
+      function loadPreset(settings) {
+        setSettings(settings);
+        updatePlanetParameters();
+        createPlanet();
+      }
+      function deletePreset(index) {
+        presets.splice(index, 1);
+        const container = document.getElementById("presetOverlay");
+        container.innerHTML = "";
+        presets.forEach((preset, i) => {
+          addPresetThumbnail(preset, i);
+        });
+        persistPresets();
+      }
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+      }
+      window.addEventListener("resize", onWindowResize);
+      function animate() {
+        requestAnimationFrame(animate);
+        if (window.cameraAnimationMode === "orbit") {
+          const elapsed = (performance.now() - window.cameraAnimationStartTime) / 1000;
+          const period = 20;
+          const angle = (elapsed / period) * 2 * Math.PI * (-1);
+          const orbitRadiusX = sizeModifier * 3;
+          const orbitRadiusZ = sizeModifier * 2.5;
+          const x = orbitRadiusX * Math.cos(angle);
+          const z = orbitRadiusZ * Math.sin(angle);
+          const inclination = window.orbitConfig ? window.orbitConfig.inclination : 0;
+          const y = (z * Math.sin(inclination)) + sizeModifier * 0.5;
+          camera.position.set(x, y, z * Math.cos(inclination));
+          camera.lookAt(new THREE.Vector3(0, 0, 0));
+        } else if (window.cameraAnimationMode === "flight") {
+          updateFlightTour();
+        }
+        if (sphere) { sphere.rotation.y += rotationSpeed; }
+        if (window.orbitControls) { window.orbitControls.update(); }
+        composer.render();
+      }
+      function init() {
+        updatePlanetParameters();
+        camera.position.copy(originalCameraPosition);
+        camera.lookAt(originalCameraTarget);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        window.orbitControls = new NovelOrbitControls(camera, renderer.domElement);
+        window.orbitControls.minDistance = sizeModifier * 1.1;
+        scene.add(new THREE.AmbientLight(0x404040, 0.5));
+        sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(-10, 5, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.bias = -0.0001;
+        sunLight.shadow.camera.left = -15;
+        sunLight.shadow.camera.right = 15;
+        sunLight.shadow.camera.top = 15;
+        sunLight.shadow.camera.bottom = -15;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 50;
+        scene.add(sunLight);
+        const sunGlow = createGlowSprite(10, "rgba(255,255,200,1)");
+        sunGlow.position.copy(sunLight.position);
+        scene.add(sunGlow);
+        createPlanet();
+        createStarfield();
+        animate();
+        loadPresetsFromStorage();
+      }
+      window.cancelAutoAnimation = function() {
+        window.cameraAnimationMode = "none";
+      };
+      return {
+        init,
+        updatePlanetParameters,
+        createPlanet,
+        exportSettings,
+        savePlanetData,
+        loadPlanetData,
+        savePreset,
+        regenerateFractal,
+        createStarfield,
+        pixelatePass,
+        celShadingPass,
+        createFlightCurve,
+        loadPresets: loadPresetsFromStorage,
+        presets: presets,
+        setPresets: setPresets
+      };
+    })();
+    
+    // Collapsible section handling
+    document.querySelectorAll(".collapsible-header").forEach(header => {
+      header.addEventListener("click", () => {
+        const content = header.nextElementSibling;
+        const icon = header.querySelector(".toggle-icon");
+        if (content.style.display === "none" || content.style.display === "") {
+          content.style.display = "block";
+          icon.textContent = "▼";
+        } else {
+          content.style.display = "none";
+          icon.textContent = "►";
+        }
+      });
+    });
+    
+    // Global UI Event Listeners
+    function addEventListeners() {
+      // REBUILD CONTROLS
+      const rebuildIDs = [
+        "seaLevel", "noiseScale", "mountainHeight", "temperature",
+        "sizeModifier", "rotationSpeed", "atmosphereThickness",
+        "atmosphereIntensity", "cloudOpacity", "cloudNoiseScale",
+        "landColorPicker", "seaColorPicker", "airColorPicker", "cloudColorPicker"
+      ];
+      rebuildIDs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("input", () => {
+            if (window.updateTimeout) clearTimeout(window.updateTimeout);
+            window.updateTimeout = setTimeout(() => {
+              PlanetApp.updatePlanetParameters();
+              PlanetApp.createPlanet();
+            }, 50);
+          });
+        }
+      });
+      
+      // STAR CONTROLS
+      const starIDs = ["starColorMix", "starSize", "starCount"];
+      starIDs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("input", () => {
+            if (window.updateTimeout) clearTimeout(window.updateTimeout);
+            window.updateTimeout = setTimeout(() => {
+              PlanetApp.createStarfield();
+            }, 50);
+          });
+        }
+      });
+      document.getElementById("enableRealisticStars").addEventListener("change", e => {
+        PlanetApp.createStarfield();
+      });
+      
+      // POST-PROCESSING CONTROLS
+      document.getElementById("pixelSize").addEventListener("input", (e) => {
+        PlanetApp.pixelatePass.uniforms.pixelSize.value = parseFloat(e.target.value);
+      });
+      document.getElementById("celLevels").addEventListener("input", (e) => {
+        PlanetApp.celShadingPass.uniforms.levels.value = parseFloat(e.target.value);
+      });
+      document.getElementById("enablePixelation").addEventListener("change", e => {
+        PlanetApp.pixelatePass.enabled = e.target.checked;
+      });
+      document.getElementById("enableCelShading").addEventListener("change", e => {
+        PlanetApp.celShadingPass.enabled = e.target.checked;
+      });
+      
+      // CAMERA CONTROLS
+      document.getElementById("orbitButton").addEventListener("click", () => {
+        window.cameraAnimationMode = "orbit";
+        window.cameraAnimationStartTime = performance.now();
+        const incl = THREE.MathUtils.degToRad(15 + Math.random() * 30);
+        window.orbitConfig = { inclination: incl };
+      });
+      document.getElementById("flightTourButton").addEventListener("click", () => {
+        window.flightCurve = PlanetApp.createFlightCurve();
+        window.previousTangent = window.flightCurve.getTangentAt(0).clone().normalize();
+        window.cameraAnimationMode = "flight";
+        window.cameraAnimationStartTime = performance.now();
+      });
+      document.getElementById("stopCameraButton").addEventListener("click", () => {
+        window.cameraAnimationMode = "none";
+        window.orbitControls.reset();
+      });
+      
+      // FILE OPERATIONS
+      document.getElementById("saveFileButton").addEventListener("click", () => {
+        PlanetApp.savePlanetData();
+      });
+      document.getElementById("loadFileButton").addEventListener("click", () => {
+        PlanetApp.loadPlanetData();
+      });
+      
+      // PRESETS
+      document.getElementById("savePresetButton").addEventListener("click", () => {
+        PlanetApp.savePreset();
+      });
+      
+      // EXPORT Presets as JSON file (named "pixcel_planets_presets.json")
+      document.getElementById("exportPresetsButton").addEventListener("click", () => {
+        const presetsJSON = JSON.stringify(PlanetApp.presets, null, 2);
+        const blob = new Blob([presetsJSON], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "pixcel_planets_presets.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+      
+      // IMPORT Presets from File
+      document.getElementById("importPresetsButton").addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "application/json";
+        input.onchange = e => {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = event => {
+            try {
+              const importedPresets = JSON.parse(event.target.result);
+              PlanetApp.setPresets(importedPresets);
+            } catch(err) {
+              alert("Error importing presets: " + err);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      });
+      
+      // RESET COLORS button event listener
+      document.getElementById("resetHuesButton").addEventListener("click", () => {
+        document.getElementById("landColorPicker").value = "#ffffff";
+        document.getElementById("seaColorPicker").value = "#001f3f";
+        document.getElementById("airColorPicker").value = "#ffffff";
+        document.getElementById("cloudColorPicker").value = "#ffffff";
+        PlanetApp.updatePlanetParameters();
+        PlanetApp.createPlanet();
+      });
+      
+      // RANDOM PLANET button event listener
+      document.getElementById("randomButton").addEventListener("click", () => {
+        document.getElementById("seaLevel").value = (Math.random() * 0.15 - 0.05).toFixed(2);
+        document.getElementById("noiseScale").value = (Math.random() * 6 + 2).toFixed(1);
+        document.getElementById("mountainHeight").value = (Math.random() * (0.1 - 0.02) + 0.02).toFixed(2);
+        document.getElementById("temperature").value = (Math.random() * 1.6 - 0.8).toFixed(1);
+        document.getElementById("sizeModifier").value = (Math.random() * 0.6 + 0.6).toFixed(2);
+        document.getElementById("rotationSpeed").value = (Math.random() * 0.01).toFixed(4);
+        document.getElementById("atmosphereThickness").value = (Math.random() * (1.5 - 1.01) + 1.01).toFixed(2);
+        document.getElementById("atmosphereIntensity").value = (Math.random() * 1).toFixed(1);
+        document.getElementById("cloudOpacity").value = (Math.random() * 1).toFixed(1);
+        document.getElementById("cloudNoiseScale").value = (Math.random() * (5 - 1) + 1).toFixed(1);
+        function randomHexColor() {
+          return "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0");
+        }
+        document.getElementById("landColorPicker").value = randomHexColor();
+        document.getElementById("seaColorPicker").value = randomHexColor();
+        document.getElementById("airColorPicker").value = randomHexColor();
+        document.getElementById("cloudColorPicker").value = randomHexColor();
+        PlanetApp.updatePlanetParameters();
+        PlanetApp.createPlanet();
+      });
+    }
+    
+    PlanetApp.init();
+    addEventListeners();
+  </script>
+</body>
+</html>
